@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Gift, Heart, Upload, Calendar, Target, Users, AlertCircle } from 'lucide-react';
+import { Gift, Heart, Upload, Calendar, Users, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import GreetingCard from '@/components/GreetingCard';
@@ -23,6 +22,7 @@ const EventView = () => {
     image: null as File | null
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isRecipient, setIsRecipient] = useState(false);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -63,6 +63,14 @@ const EventView = () => {
           }
           
           setEventData(parsedData);
+          
+          // Check if this is the recipient viewing the page
+          // For now, we'll assume the recipient is viewing if there's a special query parameter
+          // or if they're the first to view the event
+          const urlParams = new URLSearchParams(window.location.search);
+          const recipientView = urlParams.get('recipient') === 'true';
+          setIsRecipient(recipientView);
+          
         } catch (parseError) {
           console.error('Error parsing event data:', parseError);
           setError('Unable to load event data. The data may be corrupted.');
@@ -115,7 +123,8 @@ const EventView = () => {
         message: greetingForm.message,
         amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
         image: imagePreview,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        isRecipient: isRecipient
       };
 
       const updatedEvent = {
@@ -153,11 +162,6 @@ const EventView = () => {
     }
   };
 
-  const calculateProgress = () => {
-    if (!eventData.targetAmount) return 0;
-    return Math.min((eventData.totalContributions || 0) / parseFloat(eventData.targetAmount) * 100, 100);
-  };
-
   const getDaysLeft = () => {
     if (!eventData.endDate) return null;
     const end = new Date(eventData.endDate);
@@ -165,6 +169,28 @@ const EventView = () => {
     const diffTime = end.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays > 0 ? diffDays : 0;
+  };
+
+  // Filter greetings based on whether this is recipient view
+  const getDisplayedGreetings = () => {
+    if (!eventData.greetings) return [];
+    
+    if (isRecipient) {
+      // For recipient: show only greetings from others (not from recipient)
+      return eventData.greetings.filter((greeting: any) => !greeting.isRecipient);
+    } else {
+      // For others: show all greetings
+      return eventData.greetings;
+    }
+  };
+
+  const getTotalContributions = () => {
+    return eventData.totalContributions || 0;
+  };
+
+  const getContributorsCount = () => {
+    const displayedGreetings = getDisplayedGreetings();
+    return displayedGreetings.filter((g: any) => g.amount > 0).length;
   };
 
   if (loading) {
@@ -181,7 +207,6 @@ const EventView = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
-        {/* Header */}
         <header className="bg-white/80 backdrop-blur-sm border-b border-purple-100">
           <div className="container mx-auto px-4 py-6">
             <div className="text-center">
@@ -266,28 +291,21 @@ const EventView = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Progress Section */}
-        {(eventData.targetAmount || eventData.endDate) && (
+        {/* Stats Section - Only show if there are contributions or for non-recipients */}
+        {(getTotalContributions() > 0 || !isRecipient) && (
           <div className="mb-8">
             <Card className="bg-white/80 backdrop-blur-sm border-purple-100">
               <CardContent className="p-6">
-                <div className="grid md:grid-cols-3 gap-6 text-center">
-                  {eventData.targetAmount && (
+                <div className="grid md:grid-cols-2 gap-6 text-center">
+                  {/* Only show total contributions if > 0 */}
+                  {getTotalContributions() > 0 && (
                     <div>
                       <div className="flex items-center justify-center space-x-2 mb-2">
-                        <Target className="w-5 h-5 text-purple-600" />
-                        <span className="font-semibold text-gray-700">Target</span>
+                        <Gift className="w-5 h-5 text-purple-600" />
+                        <span className="font-semibold text-gray-700">Total Collected</span>
                       </div>
-                      <p className="text-2xl font-bold text-gray-800">₹{eventData.targetAmount}</p>
-                      <div className="mt-2 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${calculateProgress()}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        ₹{eventData.totalContributions || 0} collected ({calculateProgress().toFixed(0)}%)
-                      </p>
+                      <p className="text-2xl font-bold text-gray-800">₹{getTotalContributions()}</p>
+                      <p className="text-sm text-gray-600">from contributions</p>
                     </div>
                   )}
                   
@@ -297,13 +315,13 @@ const EventView = () => {
                       <span className="font-semibold text-gray-700">Contributors</span>
                     </div>
                     <p className="text-2xl font-bold text-gray-800">
-                      {eventData.greetings?.filter((g: any) => g.amount > 0).length || 0}
+                      {getContributorsCount()}
                     </p>
                     <p className="text-sm text-gray-600">people contributed</p>
                   </div>
 
                   {eventData.endDate && (
-                    <div>
+                    <div className={getTotalContributions() > 0 ? "md:col-span-2" : ""}>
                       <div className="flex items-center justify-center space-x-2 mb-2">
                         <Calendar className="w-5 h-5 text-purple-600" />
                         <span className="font-semibold text-gray-700">Time Left</span>
@@ -327,7 +345,9 @@ const EventView = () => {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-purple-600">
                   <Heart className="w-6 h-6" />
-                  <span>Leave Your Greeting & Contribute</span>
+                  <span>
+                    {isRecipient ? 'Add Your Response' : 'Leave Your Greeting & Contribute'}
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -349,7 +369,7 @@ const EventView = () => {
                       id="message"
                       value={greetingForm.message}
                       onChange={(e) => handleInputChange('message', e.target.value)}
-                      placeholder="Write your heartfelt message..."
+                      placeholder={isRecipient ? "Thank everyone for their wishes..." : "Write your heartfelt message..."}
                       rows={4}
                       required
                     />
@@ -378,25 +398,27 @@ const EventView = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Contribution Amount (₹)</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      value={greetingForm.amount}
-                      onChange={(e) => handleInputChange('amount', e.target.value)}
-                      placeholder="Enter amount (optional)"
-                      min="0"
-                    />
-                  </div>
+                  {!isRecipient && (
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Contribution Amount (₹)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        value={greetingForm.amount}
+                        onChange={(e) => handleInputChange('amount', e.target.value)}
+                        placeholder="Enter amount (optional)"
+                        min="0"
+                      />
+                    </div>
+                  )}
 
                   <Button 
                     type="submit" 
                     className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-full text-lg font-semibold transition-all duration-300"
                   >
-                    {greetingForm.amount && parseFloat(greetingForm.amount) > 0 
+                    {!isRecipient && greetingForm.amount && parseFloat(greetingForm.amount) > 0 
                       ? `Pay ₹${greetingForm.amount} with UPI & Add Greeting`
-                      : 'Add Greeting'
+                      : isRecipient ? 'Add Response' : 'Add Greeting'
                     }
                   </Button>
                 </form>
@@ -408,15 +430,15 @@ const EventView = () => {
           <div>
             <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
               <Heart className="w-6 h-6 text-pink-600" />
-              <span>Greeting Wall</span>
+              <span>{isRecipient ? 'Messages for You' : 'Greeting Wall'}</span>
               <span className="text-lg font-normal text-gray-600">
-                ({eventData.greetings?.length || 0} messages)
+                ({getDisplayedGreetings().length} messages)
               </span>
             </h2>
             
             <div className="space-y-6">
-              {eventData.greetings && eventData.greetings.length > 0 ? (
-                eventData.greetings.map((greeting: any) => (
+              {getDisplayedGreetings().length > 0 ? (
+                getDisplayedGreetings().map((greeting: any) => (
                   <GreetingCard key={greeting.id} greeting={greeting} />
                 ))
               ) : (
@@ -424,10 +446,13 @@ const EventView = () => {
                   <CardContent className="p-8 text-center">
                     <Heart className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                     <h3 className="text-lg font-semibold text-gray-600 mb-2">
-                      Be the first to leave a greeting!
+                      {isRecipient ? 'No messages yet!' : 'Be the first to leave a greeting!'}
                     </h3>
                     <p className="text-gray-500">
-                      Your message will appear here for everyone to see.
+                      {isRecipient 
+                        ? 'Messages from your friends will appear here.'
+                        : 'Your message will appear here for everyone to see.'
+                      }
                     </p>
                   </CardContent>
                 </Card>
