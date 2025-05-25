@@ -1,18 +1,21 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Gift, Heart, Upload, Calendar, Target, Users } from 'lucide-react';
+import { Gift, Heart, Upload, Calendar, Target, Users, AlertCircle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import GreetingCard from '@/components/GreetingCard';
 
 const EventView = () => {
   const { eventId } = useParams();
   const [eventData, setEventData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [greetingForm, setGreetingForm] = useState({
     name: '',
     message: '',
@@ -22,12 +25,59 @@ const EventView = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   useEffect(() => {
-    if (eventId) {
-      const stored = localStorage.getItem(`event_${eventId}`);
-      if (stored) {
-        setEventData(JSON.parse(stored));
+    const loadEvent = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (!eventId) {
+          setError('Invalid event URL. Event ID is missing.');
+          setLoading(false);
+          return;
+        }
+
+        // Add a timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+          if (loading) {
+            setError('Loading timeout. Please try refreshing the page.');
+            setLoading(false);
+          }
+        }, 5000);
+
+        const stored = localStorage.getItem(`event_${eventId}`);
+        
+        if (!stored) {
+          setError('Event not found. The event may have been deleted or the link is incorrect.');
+          setLoading(false);
+          clearTimeout(timeoutId);
+          return;
+        }
+
+        try {
+          const parsedData = JSON.parse(stored);
+          if (!parsedData || !parsedData.title) {
+            setError('Event data is corrupted. Please contact the event organizer.');
+            setLoading(false);
+            clearTimeout(timeoutId);
+            return;
+          }
+          
+          setEventData(parsedData);
+        } catch (parseError) {
+          console.error('Error parsing event data:', parseError);
+          setError('Unable to load event data. The data may be corrupted.');
+        }
+
+        clearTimeout(timeoutId);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error loading event:', err);
+        setError('An unexpected error occurred while loading the event.');
+        setLoading(false);
       }
-    }
+    };
+
+    loadEvent();
   }, [eventId]);
 
   const handleInputChange = (field: string, value: string) => {
@@ -58,38 +108,47 @@ const EventView = () => {
       return;
     }
 
-    const newGreeting = {
-      id: Date.now().toString(),
-      name: greetingForm.name,
-      message: greetingForm.message,
-      amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
-      image: imagePreview,
-      timestamp: new Date().toISOString()
-    };
+    try {
+      const newGreeting = {
+        id: Date.now().toString(),
+        name: greetingForm.name,
+        message: greetingForm.message,
+        amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
+        image: imagePreview,
+        timestamp: new Date().toISOString()
+      };
 
-    const updatedEvent = {
-      ...eventData,
-      greetings: [...(eventData.greetings || []), newGreeting],
-      totalContributions: (eventData.totalContributions || 0) + (newGreeting.amount || 0)
-    };
+      const updatedEvent = {
+        ...eventData,
+        greetings: [...(eventData.greetings || []), newGreeting],
+        totalContributions: (eventData.totalContributions || 0) + (newGreeting.amount || 0)
+      };
 
-    localStorage.setItem(`event_${eventId}`, JSON.stringify(updatedEvent));
-    setEventData(updatedEvent);
+      localStorage.setItem(`event_${eventId}`, JSON.stringify(updatedEvent));
+      setEventData(updatedEvent);
 
-    // Reset form
-    setGreetingForm({ name: '', message: '', amount: '', image: null });
-    setImagePreview(null);
+      // Reset form
+      setGreetingForm({ name: '', message: '', amount: '', image: null });
+      setImagePreview(null);
 
-    // Simulate UPI payment flow
-    if (greetingForm.amount && parseFloat(greetingForm.amount) > 0) {
+      // Simulate UPI payment flow
+      if (greetingForm.amount && parseFloat(greetingForm.amount) > 0) {
+        toast({
+          title: "UPI Payment Initiated",
+          description: `Opening UPI app for payment of ₹${greetingForm.amount}...`,
+        });
+      } else {
+        toast({
+          title: "Greeting Added!",
+          description: "Your message has been added to the greeting wall.",
+        });
+      }
+    } catch (err) {
+      console.error('Error submitting greeting:', err);
       toast({
-        title: "UPI Payment Initiated",
-        description: `Opening UPI app for payment of ₹${greetingForm.amount}...`,
-      });
-    } else {
-      toast({
-        title: "Greeting Added!",
-        description: "Your message has been added to the greeting wall.",
+        title: "Error",
+        description: "Failed to add your greeting. Please try again.",
+        variant: "destructive"
       });
     }
   };
@@ -108,12 +167,73 @@ const EventView = () => {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  if (!eventData) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading event...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+        {/* Header */}
+        <header className="bg-white/80 backdrop-blur-sm border-b border-purple-100">
+          <div className="container mx-auto px-4 py-6">
+            <div className="text-center">
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-2 rounded-lg">
+                  <Gift className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-lg font-semibold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  GiftWall
+                </span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto">
+            <Alert variant="destructive" className="mb-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Unable to Load Event</AlertTitle>
+              <AlertDescription className="mt-2">
+                {error}
+              </AlertDescription>
+            </Alert>
+
+            <div className="text-center space-y-4">
+              <h1 className="text-2xl font-bold text-gray-800">Event Not Available</h1>
+              <p className="text-gray-600">
+                We couldn't load the event you're looking for. This could be because:
+              </p>
+              <ul className="text-left text-gray-600 space-y-2 max-w-md mx-auto">
+                <li>• The event link is incorrect or expired</li>
+                <li>• The event has been deleted</li>
+                <li>• There's a temporary issue with loading the data</li>
+              </ul>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                <Button 
+                  onClick={() => window.location.reload()}
+                  variant="outline"
+                  className="flex items-center space-x-2"
+                >
+                  <span>Try Again</span>
+                </Button>
+                <Link to="/">
+                  <Button className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white">
+                    Create New Event
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
