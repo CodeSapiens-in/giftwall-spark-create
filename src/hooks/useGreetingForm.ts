@@ -10,7 +10,19 @@ interface GreetingFormData {
   image: File | null;
 }
 
+const detectBrowserAndPlatform = () => {
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isAndroid = userAgent.includes('android');
+  const isIOS = userAgent.includes('iphone') || userAgent.includes('ipad');
+  const isChrome = userAgent.includes('chrome');
+  const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+  
+  return { isAndroid, isIOS, isChrome, isSafari };
+};
+
 const generateUPIDeeplink = (upiId: string, amount: number, name: string) => {
+  const { isAndroid, isIOS, isChrome } = detectBrowserAndPlatform();
+  
   const params = new URLSearchParams({
     pa: upiId, // payee address
     am: amount.toString(), // amount
@@ -18,7 +30,48 @@ const generateUPIDeeplink = (upiId: string, amount: number, name: string) => {
     cu: 'INR' // currency
   });
   
+  // For Android Chrome, use Intent URL to show app chooser
+  if (isAndroid && isChrome) {
+    const intentParams = new URLSearchParams({
+      'S.pa': upiId,
+      'S.am': amount.toString(),
+      'S.tn': `Gift contribution ${name ? `from ${name}` : ''}`,
+      'S.cu': 'INR'
+    });
+    
+    return `intent://pay?${intentParams.toString()}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
+  }
+  
+  // For iOS, use standard UPI scheme
+  if (isIOS) {
+    return `upi://pay?${params.toString()}`;
+  }
+  
+  // For other browsers, use standard UPI scheme
   return `upi://pay?${params.toString()}`;
+};
+
+const openUPIApp = (upiLink: string, amount: number, upiId: string) => {
+  const { isAndroid, isChrome } = detectBrowserAndPlatform();
+  
+  if (isAndroid && isChrome) {
+    // For Android Chrome, try to open the intent URL
+    try {
+      window.location.href = upiLink;
+    } catch (error) {
+      // Fallback to regular UPI scheme if intent fails
+      const fallbackParams = new URLSearchParams({
+        pa: upiId,
+        am: amount.toString(),
+        tn: `Gift contribution`,
+        cu: 'INR'
+      });
+      window.location.href = `upi://pay?${fallbackParams.toString()}`;
+    }
+  } else {
+    // For other platforms, use direct link
+    window.location.href = upiLink;
+  }
 };
 
 export const useGreetingForm = () => {
@@ -62,14 +115,14 @@ export const useGreetingForm = () => {
   ) => {
     e.preventDefault();
     
-    // Validate that at least one field is filled or amount is provided
-    const hasGreeting = greetingForm.name.trim() || greetingForm.message.trim();
+    // Allow submission if user has either greeting content OR amount
+    const hasGreeting = greetingForm.name.trim() || greetingForm.message.trim() || greetingForm.image;
     const hasAmount = greetingForm.amount && parseFloat(greetingForm.amount) > 0;
     
     if (!hasGreeting && !hasAmount) {
       toast({
         title: "Please provide input",
-        description: "Either add a greeting message or specify an amount to contribute.",
+        description: "Either add a greeting message/image or specify an amount to contribute.",
         variant: "destructive"
       });
       return;
@@ -117,12 +170,12 @@ export const useGreetingForm = () => {
         if (upiId) {
           const upiLink = generateUPIDeeplink(upiId, amount, greetingForm.name);
           
-          // Try to open UPI app
-          window.location.href = upiLink;
+          // Use browser-specific opening method
+          openUPIApp(upiLink, amount, upiId);
           
           toast({
             title: "UPI Payment Initiated",
-            description: `Opening UPI app for payment of ₹${amount} to ${upiId}`,
+            description: `Opening UPI app for payment of ₹${amount}. If no app opens, please use any UPI app with ID: ${upiId}`,
           });
         } else {
           toast({
