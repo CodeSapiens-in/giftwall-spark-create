@@ -16,20 +16,20 @@ const detectBrowserAndPlatform = () => {
   const isIOS = userAgent.includes('iphone') || userAgent.includes('ipad');
   const isChrome = userAgent.includes('chrome');
   const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
-  
+
   return { isAndroid, isIOS, isChrome, isSafari };
 };
 
 const generateUPIDeeplink = (upiId: string, amount: number, name: string) => {
   const { isAndroid, isIOS, isChrome } = detectBrowserAndPlatform();
-  
+
   const params = new URLSearchParams({
     pa: upiId, // payee address
     am: amount.toString(), // amount
     tn: `Gift contribution ${name ? `from ${name}` : ''}`, // transaction note
     cu: 'INR' // currency
   });
-  
+
   // For Android Chrome, use Intent URL to show app chooser
   if (isAndroid && isChrome) {
     const intentParams = new URLSearchParams({
@@ -38,22 +38,22 @@ const generateUPIDeeplink = (upiId: string, amount: number, name: string) => {
       'S.tn': `Gift contribution ${name ? `from ${name}` : ''}`,
       'S.cu': 'INR'
     });
-    
+
     return `intent://pay?${intentParams.toString()}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`;
   }
-  
+
   // For iOS, use standard UPI scheme
   if (isIOS) {
     return `upi://pay?${params.toString()}`;
   }
-  
+
   // For other browsers, use standard UPI scheme
   return `upi://pay?${params.toString()}`;
 };
 
 const openUPIApp = (upiLink: string, amount: number, upiId: string) => {
   const { isAndroid, isChrome } = detectBrowserAndPlatform();
-  
+
   if (isAndroid && isChrome) {
     // For Android Chrome, try to open the intent URL
     try {
@@ -114,11 +114,11 @@ export const useGreetingForm = () => {
     refetchEventData?: () => void
   ) => {
     e.preventDefault();
-    
+
     // Allow submission if user has either greeting content OR amount
     const hasGreeting = greetingForm.name.trim() || greetingForm.message.trim() || greetingForm.image;
     const hasAmount = greetingForm.amount && parseFloat(greetingForm.amount) > 0;
-    
+
     if (!hasGreeting && !hasAmount) {
       toast({
         title: "Please provide input",
@@ -141,38 +141,40 @@ export const useGreetingForm = () => {
 
     try {
       // Insert greeting into database
-      const { error } = await supabase
-        .from('greetings')
-        .insert({
-          event_id: eventId,
-          name: greetingForm.name.trim() || null,
-          message: greetingForm.message.trim() || null,
-          amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
-          image_url: imagePreview || null,
-          is_recipient: isRecipient
-        });
+      if (hasGreeting) {
+        const { error } = await supabase
+          .from('greetings')
+          .insert({
+            event_id: eventId,
+            name: greetingForm.name.trim() || null,
+            message: greetingForm.message.trim() || null,
+            amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
+            image_url: imagePreview || null,
+            is_recipient: isRecipient
+          });
 
-      if (error) {
-        console.error('Error submitting greeting:', error);
-        toast({
-          title: "Error",
-          description: "Failed to add your greeting. Please try again.",
-          variant: "destructive"
-        });
-        return;
+        if (error) {
+          console.error('Error submitting greeting:', error);
+          toast({
+            title: "Error",
+            description: "Failed to add your greeting. Please try again.",
+            variant: "destructive"
+          });
+          return;
+        }
       }
 
       // Handle UPI payment if amount is provided and user is not the recipient
       if (!isRecipient && greetingForm.amount && parseFloat(greetingForm.amount) > 0) {
         const amount = parseFloat(greetingForm.amount);
         const upiId = eventData.upi_id;
-        
+
         if (upiId) {
           const upiLink = generateUPIDeeplink(upiId, amount, greetingForm.name);
-          
+
           // Use browser-specific opening method
           openUPIApp(upiLink, amount, upiId);
-          
+
           toast({
             title: "UPI Payment Initiated",
             description: `Opening UPI app for payment of ₹${amount}. If no app opens, please use any UPI app with ID: ${upiId}`,

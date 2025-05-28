@@ -33,7 +33,7 @@ const GreetingCard: React.FC<GreetingCardProps> = ({ greeting }) => {
           <div className="flex items-center space-x-3">
             <div className="bg-gradient-to-r from-purple-500 to-pink-500 w-10 h-10 rounded-full flex items-center justify-center">
               <span className="text-white font-semibold text-sm">
-                {greeting.name.charAt(0).toUpperCase()}
+                {greeting.name ? greeting.name.charAt(0).toUpperCase() : ''}
               </span>
             </div>
             <div>
