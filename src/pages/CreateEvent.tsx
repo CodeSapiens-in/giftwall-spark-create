@@ -198,15 +198,6 @@ const CreateEvent = () => {
                   />
                 </div>
 
-                {/* CAPTCHA Placeholder */}
-                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <p className="text-gray-500">CAPTCHA verification would appear here</p>
-                  <div className="mt-2 inline-flex items-center space-x-2">
-                    <input type="checkbox" id="captcha" className="rounded" />
-                    <label htmlFor="captcha" className="text-sm text-gray-600">I'm not a robot</label>
-                  </div>
-                </div>
-
                 <Button 
                   type="submit" 
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105"
