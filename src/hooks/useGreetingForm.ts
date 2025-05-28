@@ -9,6 +9,17 @@ interface GreetingFormData {
   image: File | null;
 }
 
+const generateUPIDeeplink = (upiId: string, amount: number, name: string) => {
+  const params = new URLSearchParams({
+    pa: upiId, // payee address
+    am: amount.toString(), // amount
+    tn: `Gift contribution from ${name}`, // transaction note
+    cu: 'INR' // currency
+  });
+  
+  return `upi://pay?${params.toString()}`;
+};
+
 export const useGreetingForm = () => {
   const [greetingForm, setGreetingForm] = useState<GreetingFormData>({
     name: '',
@@ -77,19 +88,38 @@ export const useGreetingForm = () => {
       localStorage.setItem(`event_${eventId}`, JSON.stringify(updatedEvent));
       setEventData(updatedEvent);
 
-      resetForm();
-
-      if (greetingForm.amount && parseFloat(greetingForm.amount) > 0) {
-        toast({
-          title: "UPI Payment Initiated",
-          description: `Opening UPI app for payment of ₹${greetingForm.amount}...`,
-        });
+      // Handle UPI payment if amount is provided and user is not the recipient
+      if (!isRecipient && greetingForm.amount && parseFloat(greetingForm.amount) > 0) {
+        const amount = parseFloat(greetingForm.amount);
+        const upiId = eventData.upiId;
+        
+        if (upiId) {
+          const upiLink = generateUPIDeeplink(upiId, amount, greetingForm.name);
+          
+          // Try to open UPI app
+          const link = document.createElement('a');
+          link.href = upiLink;
+          link.click();
+          
+          toast({
+            title: "UPI Payment Initiated",
+            description: `Opening UPI app for payment of ₹${amount} to ${upiId}`,
+          });
+        } else {
+          toast({
+            title: "UPI ID not found",
+            description: "Unable to process payment. UPI ID is missing.",
+            variant: "destructive"
+          });
+        }
       } else {
         toast({
           title: "Greeting Added!",
           description: "Your message has been added to the greeting wall.",
         });
       }
+
+      resetForm();
     } catch (err) {
       console.error('Error submitting greeting:', err);
       toast({
