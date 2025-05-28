@@ -42,8 +42,7 @@ export const useGreetingForm = () => {
         setImagePreview(e.target?.result as string);
       };
       reader.readAsDataURL(file);
-    }
-  };
+    }};
 
   const resetForm = () => {
     setGreetingForm({ name: '', message: '', amount: '', image: null });
@@ -97,9 +96,7 @@ export const useGreetingForm = () => {
           const upiLink = generateUPIDeeplink(upiId, amount, greetingForm.name);
           
           // Try to open UPI app
-          const link = document.createElement('a');
-          link.href = upiLink;
-          link.click();
+          window.location.href = upiLink;
           
           toast({
             title: "UPI Payment Initiated",
