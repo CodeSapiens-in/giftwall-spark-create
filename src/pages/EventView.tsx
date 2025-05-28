@@ -10,12 +10,12 @@ import EventError from '@/components/EventError';
 import EventLoading from '@/components/EventLoading';
 
 const EventView = () => {
-  const { eventData, setEventData, loading, error, isRecipient, eventId } = useEventData();
-  const { greetingForm, imagePreview, handleInputChange, handleImageUpload, handleSubmit } = useGreetingForm();
+  const { eventData, setEventData, loading, error, isRecipient, eventId, refetchEventData } = useEventData();
+  const { greetingForm, imagePreview, submitting, handleInputChange, handleImageUpload, handleSubmit } = useGreetingForm();
 
   const getDaysLeft = () => {
-    if (!eventData?.endDate) return null;
-    const end = new Date(eventData.endDate);
+    if (!eventData?.end_date) return null;
+    const end = new Date(eventData.end_date);
     const now = new Date();
     const diffTime = end.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -26,7 +26,7 @@ const EventView = () => {
     if (!eventData?.greetings) return [];
     
     if (isRecipient) {
-      return eventData.greetings.filter((greeting: any) => !greeting.isRecipient);
+      return eventData.greetings.filter((greeting: any) => !greeting.is_recipient);
     } else {
       return eventData.greetings;
     }
@@ -42,7 +42,7 @@ const EventView = () => {
   };
 
   const onSubmit = (e: React.FormEvent) => {
-    handleSubmit(e, eventData, setEventData, eventId, isRecipient);
+    handleSubmit(e, eventData, setEventData, eventId, isRecipient, refetchEventData);
   };
 
   if (loading) {
@@ -73,6 +73,7 @@ const EventView = () => {
               greetingForm={greetingForm}
               imagePreview={imagePreview}
               isRecipient={isRecipient}
+              submitting={submitting}
               handleInputChange={handleInputChange}
               handleImageUpload={handleImageUpload}
               handleSubmit={onSubmit}

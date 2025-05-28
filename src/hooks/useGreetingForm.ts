@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface GreetingFormData {
   name: string;
@@ -13,7 +14,7 @@ const generateUPIDeeplink = (upiId: string, amount: number, name: string) => {
   const params = new URLSearchParams({
     pa: upiId, // payee address
     am: amount.toString(), // amount
-    tn: `Gift contribution from ${name}`, // transaction note
+    tn: `Gift contribution ${name ? `from ${name}` : ''}`, // transaction note
     cu: 'INR' // currency
   });
   
@@ -28,6 +29,7 @@ export const useGreetingForm = () => {
     image: null
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     setGreetingForm(prev => ({ ...prev, [field]: value }));
@@ -42,55 +44,75 @@ export const useGreetingForm = () => {
         setImagePreview(e.target?.result as string);
       };
       reader.readAsDataURL(file);
-    }};
+    }
+  };
 
   const resetForm = () => {
     setGreetingForm({ name: '', message: '', amount: '', image: null });
     setImagePreview(null);
   };
 
-  const handleSubmit = (
+  const handleSubmit = async (
     e: React.FormEvent,
     eventData: any,
     setEventData: (data: any) => void,
     eventId: string | undefined,
-    isRecipient: boolean
+    isRecipient: boolean,
+    refetchEventData?: () => void
   ) => {
     e.preventDefault();
     
-    if (!greetingForm.name.trim() || !greetingForm.message.trim()) {
+    // Validate that at least one field is filled or amount is provided
+    const hasGreeting = greetingForm.name.trim() || greetingForm.message.trim();
+    const hasAmount = greetingForm.amount && parseFloat(greetingForm.amount) > 0;
+    
+    if (!hasGreeting && !hasAmount) {
       toast({
-        title: "Please fill required fields",
-        description: "Name and message are required.",
+        title: "Please provide input",
+        description: "Either add a greeting message or specify an amount to contribute.",
         variant: "destructive"
       });
       return;
     }
 
+    if (!eventId) {
+      toast({
+        title: "Error",
+        description: "Event ID is missing.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
-      const newGreeting = {
-        id: Date.now().toString(),
-        name: greetingForm.name,
-        message: greetingForm.message,
-        amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
-        image: imagePreview,
-        timestamp: new Date().toISOString(),
-        isRecipient: isRecipient
-      };
+      // Insert greeting into database
+      const { error } = await supabase
+        .from('greetings')
+        .insert({
+          event_id: eventId,
+          name: greetingForm.name.trim() || null,
+          message: greetingForm.message.trim() || null,
+          amount: greetingForm.amount ? parseFloat(greetingForm.amount) : 0,
+          image_url: imagePreview || null,
+          is_recipient: isRecipient
+        });
 
-      const updatedEvent = {
-        ...eventData,
-        greetings: [...(eventData.greetings || []), newGreeting],
-        totalContributions: (eventData.totalContributions || 0) + (newGreeting.amount || 0)
-      };
-
-      localStorage.setItem(`event_${eventId}`, JSON.stringify(updatedEvent));
-      setEventData(updatedEvent);
+      if (error) {
+        console.error('Error submitting greeting:', error);
+        toast({
+          title: "Error",
+          description: "Failed to add your greeting. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
 
       // Handle UPI payment if amount is provided and user is not the recipient
       if (!isRecipient && greetingForm.amount && parseFloat(greetingForm.amount) > 0) {
         const amount = parseFloat(greetingForm.amount);
-        const upiId = eventData.upiId;
+        const upiId = eventData.upi_id;
         
         if (upiId) {
           const upiLink = generateUPIDeeplink(upiId, amount, greetingForm.name);
@@ -112,8 +134,13 @@ export const useGreetingForm = () => {
       } else {
         toast({
           title: "Greeting Added!",
-          description: "Your message has been added to the greeting wall.",
+          description: hasGreeting ? "Your message has been added to the greeting wall." : "Your contribution has been recorded.",
         });
+      }
+
+      // Refresh the event data
+      if (refetchEventData) {
+        refetchEventData();
       }
 
       resetForm();
@@ -124,12 +151,15 @@ export const useGreetingForm = () => {
         description: "Failed to add your greeting. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return {
     greetingForm,
     imagePreview,
+    submitting,
     handleInputChange,
     handleImageUpload,
     handleSubmit,

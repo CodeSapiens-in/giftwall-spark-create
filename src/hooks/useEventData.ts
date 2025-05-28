@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 export const useEventData = () => {
   const { eventId } = useParams();
@@ -9,65 +10,76 @@ export const useEventData = () => {
   const [error, setError] = useState<string | null>(null);
   const [isRecipient, setIsRecipient] = useState(false);
 
-  useEffect(() => {
-    const loadEvent = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchEventData = async () => {
+    if (!eventId) {
+      setError('Invalid event URL. Event ID is missing.');
+      setLoading(false);
+      return;
+    }
 
-        if (!eventId) {
-          setError('Invalid event URL. Event ID is missing.');
-          setLoading(false);
-          return;
-        }
+    try {
+      // Fetch event details
+      const { data: event, error: eventError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('event_id', eventId)
+        .single();
 
-        const timeoutId = setTimeout(() => {
-          if (loading) {
-            setError('Loading timeout. Please try refreshing the page.');
-            setLoading(false);
-          }
-        }, 5000);
-
-        const stored = localStorage.getItem(`event_${eventId}`);
-        
-        if (!stored) {
+      if (eventError) {
+        if (eventError.code === 'PGRST116') {
           setError('Event not found. The event may have been deleted or the link is incorrect.');
-          setLoading(false);
-          clearTimeout(timeoutId);
-          return;
+        } else {
+          setError('Failed to load event. Please try again.');
         }
-
-        try {
-          const parsedData = JSON.parse(stored);
-          if (!parsedData || !parsedData.title) {
-            setError('Event data is corrupted. Please contact the event organizer.');
-            setLoading(false);
-            clearTimeout(timeoutId);
-            return;
-          }
-          
-          setEventData(parsedData);
-          
-          const urlParams = new URLSearchParams(window.location.search);
-          const recipientView = urlParams.get('recipient') === 'true';
-          setIsRecipient(recipientView);
-          
-        } catch (parseError) {
-          console.error('Error parsing event data:', parseError);
-          setError('Unable to load event data. The data may be corrupted.');
-        }
-
-        clearTimeout(timeoutId);
         setLoading(false);
-      } catch (err) {
-        console.error('Error loading event:', err);
-        setError('An unexpected error occurred while loading the event.');
-        setLoading(false);
+        return;
       }
-    };
 
-    loadEvent();
-  }, [eventId, loading]);
+      // Fetch greetings for this event
+      const { data: greetings, error: greetingsError } = await supabase
+        .from('greetings')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
+      if (greetingsError) {
+        console.error('Error fetching greetings:', greetingsError);
+        // Continue with event data even if greetings fail
+      }
+
+      // Calculate total contributions
+      const totalContributions = greetings?.reduce((sum, greeting) => sum + (greeting.amount || 0), 0) || 0;
+
+      const eventWithGreetings = {
+        ...event,
+        greetings: greetings || [],
+        totalContributions
+      };
+
+      setEventData(eventWithGreetings);
+      
+      // Check if user is recipient
+      const urlParams = new URLSearchParams(window.location.search);
+      const recipientView = urlParams.get('recipient') === 'true';
+      setIsRecipient(recipientView);
+      
+    } catch (err) {
+      console.error('Error loading event:', err);
+      setError('An unexpected error occurred while loading the event.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEventData();
+  }, [eventId]);
+
+  const refetchEventData = () => {
+    setLoading(true);
+    setError(null);
+    fetchEventData();
+  };
 
   return {
     eventData,
@@ -75,6 +87,7 @@ export const useEventData = () => {
     loading,
     error,
     isRecipient,
-    eventId
+    eventId,
+    refetchEventData
   };
 };

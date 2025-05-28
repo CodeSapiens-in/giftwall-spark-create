@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Gift, Info } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const CreateEvent = () => {
   const navigate = useNavigate();
@@ -20,12 +21,13 @@ const CreateEvent = () => {
     targetAmount: '',
     endDate: ''
   });
+  const [loading, setLoading] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.title.trim()) {
@@ -46,24 +48,54 @@ const CreateEvent = () => {
       return;
     }
 
-    // Generate random IDs for demo
-    const eventId = Math.random().toString(36).substring(2, 8);
-    const manageId = Math.random().toString(36).substring(2, 12);
-    
-    // Store event data in localStorage for demo
-    const eventData = {
-      ...formData,
-      eventId,
-      manageId,
-      createdAt: new Date().toISOString(),
-      contributions: [],
-      greetings: []
-    };
-    
-    localStorage.setItem(`event_${eventId}`, JSON.stringify(eventData));
-    
-    // Navigate to confirmation page
-    navigate(`/event-created/${eventId}/${manageId}`);
+    setLoading(true);
+
+    try {
+      // Generate random IDs for demo
+      const eventId = Math.random().toString(36).substring(2, 8);
+      const manageId = Math.random().toString(36).substring(2, 12);
+      
+      // Store event data in Supabase
+      const { error } = await supabase
+        .from('events')
+        .insert({
+          event_id: eventId,
+          manage_id: manageId,
+          title: formData.title,
+          description: formData.description || null,
+          upi_id: formData.upiId,
+          event_type: formData.eventType || null,
+          target_amount: formData.targetAmount ? parseFloat(formData.targetAmount) : null,
+          end_date: formData.endDate || null
+        });
+
+      if (error) {
+        console.error('Error creating event:', error);
+        toast({
+          title: "Error",
+          description: "Failed to create event. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Event Created!",
+        description: "Your event has been successfully created.",
+      });
+      
+      // Navigate to confirmation page
+      navigate(`/event-created/${eventId}/${manageId}`);
+    } catch (err) {
+      console.error('Error creating event:', err);
+      toast({
+        title: "Error",
+        description: "Failed to create event. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -200,9 +232,10 @@ const CreateEvent = () => {
 
                 <Button 
                   type="submit" 
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create Event Page
+                  {loading ? 'Creating...' : 'Create Event Page'}
                 </Button>
               </form>
             </CardContent>

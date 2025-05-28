@@ -5,21 +5,45 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Gift, Copy, CheckCircle, ExternalLink, AlertTriangle } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const EventCreated = () => {
   const { eventId, manageId } = useParams();
   const [eventData, setEventData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   
   const publicUrl = `${window.location.origin}/event/${eventId}`;
   const manageUrl = `${window.location.origin}/manage/${manageId}`;
 
   useEffect(() => {
-    if (eventId) {
-      const stored = localStorage.getItem(`event_${eventId}`);
-      if (stored) {
-        setEventData(JSON.parse(stored));
+    const fetchEvent = async () => {
+      if (eventId) {
+        try {
+          const { data, error } = await supabase
+            .from('events')
+            .select('*')
+            .eq('event_id', eventId)
+            .single();
+
+          if (error) {
+            console.error('Error fetching event:', error);
+            toast({
+              title: "Error",
+              description: "Failed to load event details.",
+              variant: "destructive"
+            });
+          } else {
+            setEventData(data);
+          }
+        } catch (err) {
+          console.error('Error fetching event:', err);
+        } finally {
+          setLoading(false);
+        }
       }
-    }
+    };
+
+    fetchEvent();
   }, [eventId]);
 
   const copyToClipboard = (text: string, label: string) => {
@@ -31,8 +55,19 @@ const EventCreated = () => {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading event...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!eventData) {
-    return <div>Loading...</div>;
+    return <div>Event not found</div>;
   }
 
   return (
@@ -148,16 +183,16 @@ const EventCreated = () => {
                     <p className="text-gray-600">{eventData.description}</p>
                   </div>
                 )}
-                {eventData.targetAmount && (
+                {eventData.target_amount && (
                   <div>
                     <h3 className="font-semibold text-gray-700 mb-1">Target Amount</h3>
-                    <p className="text-gray-600">₹{eventData.targetAmount}</p>
+                    <p className="text-gray-600">₹{eventData.target_amount}</p>
                   </div>
                 )}
-                {eventData.endDate && (
+                {eventData.end_date && (
                   <div>
                     <h3 className="font-semibold text-gray-700 mb-1">End Date</h3>
-                    <p className="text-gray-600">{new Date(eventData.endDate).toLocaleDateString()}</p>
+                    <p className="text-gray-600">{new Date(eventData.end_date).toLocaleDateString()}</p>
                   </div>
                 )}
               </div>

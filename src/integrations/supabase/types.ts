@@ -9,7 +9,89 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      events: {
+        Row: {
+          created_at: string
+          description: string | null
+          end_date: string | null
+          event_id: string
+          event_type: string | null
+          id: string
+          manage_id: string
+          target_amount: number | null
+          title: string
+          updated_at: string
+          upi_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          event_id: string
+          event_type?: string | null
+          id?: string
+          manage_id: string
+          target_amount?: number | null
+          title: string
+          updated_at?: string
+          upi_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          event_id?: string
+          event_type?: string | null
+          id?: string
+          manage_id?: string
+          target_amount?: number | null
+          title?: string
+          updated_at?: string
+          upi_id?: string
+        }
+        Relationships: []
+      }
+      greetings: {
+        Row: {
+          amount: number | null
+          created_at: string
+          event_id: string
+          id: string
+          image_url: string | null
+          is_recipient: boolean | null
+          message: string | null
+          name: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          event_id: string
+          id?: string
+          image_url?: string | null
+          is_recipient?: boolean | null
+          message?: string | null
+          name?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          image_url?: string | null
+          is_recipient?: boolean | null
+          message?: string | null
+          name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "greetings_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["event_id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

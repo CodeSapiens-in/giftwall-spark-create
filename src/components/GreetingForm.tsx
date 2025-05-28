@@ -16,6 +16,7 @@ interface GreetingFormProps {
   };
   imagePreview: string | null;
   isRecipient: boolean;
+  submitting?: boolean;
   handleInputChange: (field: string, value: string) => void;
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSubmit: (e: React.FormEvent) => void;
@@ -25,10 +26,14 @@ const GreetingForm: React.FC<GreetingFormProps> = ({
   greetingForm,
   imagePreview,
   isRecipient,
+  submitting = false,
   handleInputChange,
   handleImageUpload,
   handleSubmit
 }) => {
+  const hasGreeting = greetingForm.name.trim() || greetingForm.message.trim();
+  const hasAmount = greetingForm.amount && parseFloat(greetingForm.amount) > 0;
+
   return (
     <Card className="bg-white/80 backdrop-blur-sm border-purple-100 shadow-lg sticky top-4">
       <CardHeader>
@@ -38,29 +43,32 @@ const GreetingForm: React.FC<GreetingFormProps> = ({
             {isRecipient ? 'Add Your Response' : 'Leave Your Greeting & Contribute'}
           </span>
         </CardTitle>
+        {!isRecipient && (
+          <p className="text-sm text-gray-600">
+            You can add a greeting message, contribute money, or both!
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Your Name *</Label>
+            <Label htmlFor="name">Your Name</Label>
             <Input
               id="name"
               value={greetingForm.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
               placeholder="Enter your name"
-              required
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="message">Your Message *</Label>
+            <Label htmlFor="message">Your Message</Label>
             <Textarea
               id="message"
               value={greetingForm.message}
               onChange={(e) => handleInputChange('message', e.target.value)}
               placeholder={isRecipient ? "Thank everyone for their wishes..." : "Write your heartfelt message..."}
               rows={4}
-              required
             />
           </div>
 
@@ -95,19 +103,28 @@ const GreetingForm: React.FC<GreetingFormProps> = ({
                 type="number"
                 value={greetingForm.amount}
                 onChange={(e) => handleInputChange('amount', e.target.value)}
-                placeholder="Enter amount (optional)"
+                placeholder="Enter amount"
                 min="0"
               />
+              {greetingForm.amount && parseFloat(greetingForm.amount) > 0 && (
+                <p className="text-sm text-gray-600">
+                  UPI payment will open after submitting
+                </p>
+              )}
             </div>
           )}
 
           <Button 
             type="submit" 
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-full text-lg font-semibold transition-all duration-300"
+            disabled={submitting}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-full text-lg font-semibold transition-all duration-300 disabled:opacity-50"
           >
-            {!isRecipient && greetingForm.amount && parseFloat(greetingForm.amount) > 0 
-              ? `Pay ₹${greetingForm.amount} with UPI & Add Greeting`
-              : isRecipient ? 'Add Response' : 'Add Greeting'
+            {submitting ? 'Submitting...' : 
+              !isRecipient && hasAmount && !hasGreeting 
+                ? `Pay ₹${greetingForm.amount} with UPI`
+                : !isRecipient && hasAmount && hasGreeting
+                ? `Pay ₹${greetingForm.amount} with UPI & Add Greeting`
+                : isRecipient ? 'Add Response' : 'Add Greeting'
             }
           </Button>
         </form>
